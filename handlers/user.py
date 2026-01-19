@@ -255,7 +255,7 @@ async def show_my_purchases(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("watch_"))
 async def watch_episode(callback: CallbackQuery):
-    """Generate token and show video access button"""
+    """Send video directly to user"""
     episode_id = int(callback.data.split("_")[1])
     
     # Check if user has access
@@ -273,24 +273,32 @@ async def watch_episode(callback: CallbackQuery):
     
     episode_id, course_id, title, description, video_path, price, episode_number = episode
     
-    # Generate access token
-    token = await db.create_video_token(callback.from_user.id, episode_id)
-    
-    watch_text = f"▶️ مشاهدة الحلقة\n\n"
-    watch_text += f"🎬 {title}\n\n"
-    if description:
-        watch_text += f"{description}\n\n"
-    watch_text += "⚠️ ملاحظة: الرابط صالح لمدة 24 ساعة فقط.\n"
-    watch_text += "يمكنك المشاهدة فقط من تطبيق تلغرام على الهاتف."
-    
-    await callback.message.edit_text(
-        watch_text,
-        reply_markup=user_kb.video_access_keyboard(episode_id, callback.from_user.id, token)
-    )
-    await callback.answer()
+    # Send video directly
+    try:
+        await callback.message.answer("⏳ جاري إرسال الفيديو...")
+        
+        caption = f"🎬 {title}\n\n"
+        if description:
+            caption += f"{description}\n\n"
+        caption += "⚠️ ملاحظة: هذا الفيديو للاستخدام الشخصي فقط"
+        
+        # Send video using file_id
+        await callback.bot.send_video(
+            chat_id=callback.from_user.id,
+            video=video_path,  # This is the file_id from Telegram
+            caption=caption,
+            reply_markup=user_kb.back_to_main_keyboard()
+        )
+        
+        await callback.answer("✅ تم إرسال الفيديو!")
+        
+    except Exception as e:
+        print(f"Error sending video: {e}")
+        await callback.answer("❌ حدث خطأ في إرسال الفيديو", show_alert=True)
 
 
 @router.callback_query(F.data == "noop")
 async def noop_callback(callback: CallbackQuery):
     """No operation callback for headers"""
     await callback.answer()
+
