@@ -255,7 +255,7 @@ async def show_my_purchases(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("watch_"))
 async def watch_episode(callback: CallbackQuery):
-    """Send video directly to user"""
+    """Send video directly to user with protection"""
     episode_id = int(callback.data.split("_")[1])
     
     # Check if user has access
@@ -273,20 +273,31 @@ async def watch_episode(callback: CallbackQuery):
     
     episode_id, course_id, title, description, video_path, price, episode_number = episode
     
-    # Send video directly
+    # Send video directly with protection
     try:
         await callback.message.answer("⏳ جاري إرسال الفيديو...")
+        
+        # Create watermark caption with username
+        username = callback.from_user.username or callback.from_user.first_name
+        user_id = callback.from_user.id
         
         caption = f"🎬 {title}\n\n"
         if description:
             caption += f"{description}\n\n"
-        caption += "⚠️ ملاحظة: هذا الفيديو للاستخدام الشخصي فقط"
+        caption += "━━━━━━━━━━━━━━━\n"
+        caption += f"👤 مشتراة بواسطة: @{username}\n" if callback.from_user.username else f"👤 مشتراة بواسطة: {username}\n"
+        caption += f"🆔 ID: {user_id}\n"
+        caption += "━━━━━━━━━━━━━━━\n\n"
+        caption += "⚠️ هذا الفيديو للاستخدام الشخصي فقط\n"
+        caption += "🚫 ممنوع المشاركة أو إعادة التوزيع\n"
+        caption += "⚖️ انتهاك الشروط يؤدي للحظر الدائم"
         
-        # Send video using file_id
+        # Send video using file_id with protection
         await callback.bot.send_video(
             chat_id=callback.from_user.id,
             video=video_path,  # This is the file_id from Telegram
             caption=caption,
+            protect_content=True,  # Prevents forwarding, saving, and screenshots
             reply_markup=user_kb.back_to_main_keyboard()
         )
         
@@ -301,4 +312,3 @@ async def watch_episode(callback: CallbackQuery):
 async def noop_callback(callback: CallbackQuery):
     """No operation callback for headers"""
     await callback.answer()
-
