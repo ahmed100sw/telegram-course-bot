@@ -77,21 +77,13 @@ def stream_video(token):
     
     video_path = video_info['video_path']
     
-    # Check if video_path is a file_id (Telegram file)
-    # In this case, we need to download from Telegram
-    # For now, we'll assume videos are stored locally
-    # You can extend this to download from Telegram Bot API
-    
-    # For demonstration, return a placeholder response
-    # In production, you would:
-    # 1. Download video from Telegram using file_id
-    # 2. Stream it to the user
-    # 3. Or store videos locally and stream from disk
-    
+    # For Telegram file_ids, return the file_id so the Web App can request it from bot
+    # Or redirect to Telegram file URL
     return jsonify({
-        'error': 'تنفيذ البث قيد التطوير. يرجى تحميل الفيديوهات محلياً.',
-        'note': 'في الإنتاج، سيتم تحميل الفيديو من تلغرام أو من التخزين المحلي'
-    }), 501
+        'video_url': f'https://api.telegram.org/file/bot{config.BOT_TOKEN}/{video_path}',
+        'file_id': video_path,
+        'title': video_info['title']
+    })
 
 
 @app.route('/api/stream/local/<token>')
