@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مشاهدة الفيديو</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <div id="loading" class="container">
+            <div class="spinner"></div>
+            <p>جاري التحميل...</p>
+        </div>
+
+        <div id="error" class="container" style="display: none;">
+            <div class="error-icon">⚠️</div>
+            <h2 id="error-title">خطأ</h2>
+            <p id="error-message"></p>
+        </div>
+
+        <div id="video-container" style="display: none;">
+            <div class="video-header">
+                <h3 id="video-title">عنوان الفيديو</h3>
+            </div>
+            <video id="video-player" controls controlsList="nodownload" disablePictureInPicture>
+                <source id="video-source" type="video/mp4">
+                متصفحك لا يدعم تشغيل الفيديو.
+            </video>
+            <div class="video-info">
+                <p>⚠️ هذا الفيديو متاح للمشاهدة فقط ولا يمكن تحميله</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+
+        // Get token from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+
+        // Device detection function
+        function detectDevice() {
+            const userAgent = navigator.userAgent.toLowerCase();
+            const platform = navigator.platform.toLowerCase();
+            
+            // Check if running in Telegram Desktop
+            if (userAgent.includes('telegram')) {
+                // Check if it's desktop version
+                if (platform.includes('win') || platform.includes('mac') || platform.includes('linux')) {
+                    return 'telegram_desktop';
+                }
+            }
+            
+            // Check if running in web browser (not Telegram app)
+            if (!tg.initDataUnsafe || !tg.initDataUnsafe.user) {
+                return 'web_browser';
+            }
+            
+            // Check if desktop browser
+            if (platform.includes('win') || platform.includes('mac') || platform.includes('linux')) {
+                // Additional check for mobile browsers on desktop
+                if (!userAgent.includes('mobile') && !userAgent.includes('android') && !userAgent.includes('iphone')) {
+                    return 'desktop';
+                }
+            }
+            
+            // Check for mobile devices
+            if (userAgent.includes('android') || userAgent.includes('iphone') || userAgent.includes('ipad')) {
+                return 'mobile';
+            }
+            
+            // Default to desktop if uncertain
+            return 'desktop';
+        }
+
+        // Show error function
+        function showError(title, message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('video-container').style.display = 'none';
+            document.getElementById('error').style.display = 'flex';
+            document.getElementById('error-title').textContent = title;
+            document.getElementById('error-message').textContent = message;
+            
+            // Set theme color to red for error
+            tg.setHeaderColor('#dc3545');
+        }
+
+        // Load video function
+        async function loadVideo() {
+            // Check token
+            if (!token) {
+                showError('رابط غير صالح', 'لم يتم العثور على رمز الوصول. يرجى الحصول على رابط جديد من البوت.');
+                return;
+            }
+
+            // Detect device
+            const deviceType = detectDevice();
+            console.log('Device type detected:', deviceType);
+
+            // Block non-mobile devices
+            if (deviceType !== 'mobile') {
+                let errorMessage = 'هذا الفيديو متاح للمشاهدة فقط من تطبيق تلغرام على الهاتف المحمول.';
+                
+                if (deviceType === 'telegram_desktop') {
+                    errorMessage = 'لا يمكن المشاهدة من تلغرام سطح المكتب. يرجى استخدام تطبيق تلغرام على هاتفك المحمول.';
+                } else if (deviceType === 'web_browser') {
+                    errorMessage = 'لا يمكن المشاهدة من المتصفح. يرجى فتح الرابط من تطبيق تلغرام على هاتفك المحمول.';
+                } else if (deviceType === 'desktop') {
+                    errorMessage = 'لا يمكن المشاهدة من الكمبيوتر. يرجى استخدام تطبيق تلغرام على هاتفك المحمول.';
+                }
+                
+                showError('جهاز غير مدعوم', errorMessage);
+                return;
+            }
+
+            // Validate token and get video
+            try {
+                const response = await fetch(`/api/video/${token}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        showError('رابط غير صالح', 'رمز الوصول غير صحيح أو منتهي الصلاحية. يرجى الحصول على رابط جديد من البوت.');
+                    } else if (response.status === 403) {
+                        showError('غير مصرح', data.error || 'ليس لديك صلاحية لمشاهدة هذا الفيديو.');
+                    } else {
+                        showError('خطأ', data.error || 'حدث خطأ أثناء تحميل الفيديو.');
+                    }
+                    return;
+                }
+
+                // Display video
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('video-container').style.display = 'block';
+                document.getElementById('video-title').textContent = data.title;
+                document.getElementById('video-source').src = `/api/stream/${token}`;
+                
+                const videoPlayer = document.getElementById('video-player');
+                videoPlayer.load();
+
+                // Set theme color to primary
+                tg.setHeaderColor('#0088cc');
+
+                // Prevent right-click on video
+                videoPlayer.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
+                });
+
+                // Disable screenshot on some browsers (limited support)
+                try {
+                    videoPlayer.style.webkitUserSelect = 'none';
+                    videoPlayer.style.userSelect = 'none';
+                } catch (e) {
+                    console.log('Screenshot prevention not fully supported');
+                }
+
+            } catch (error) {
+                console.error('Error loading video:', error);
+                showError('خطأ في الاتصال', 'تعذر الاتصال بالخادم. يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى.');
+            }
+        }
+
+        // Start loading video
+        loadVideo();
+
+        // Prevent text selection
+        document.addEventListener('selectstart', (e) => {
+            e.preventDefault();
+        });
+
+        // Disable long-press context menu on mobile
+        document.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>
